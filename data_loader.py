@@ -9,10 +9,12 @@ import scipy
 from glob import glob
 import numpy as np
 import matplotlib.pyplot as plt
+from scipy.ndimage import zoom
 
 class DataLoader():
     def __init__(self, img_res=(128, 128), SRscale=2):
         #self.dataset_name = dataset_name
+        self.SRscale=SRscale
         self.img_res = img_res
         self.target_res = (SRscale*self.img_res[0], SRscale*self.img_res[1], 3)
         #self.main_path = main_path
@@ -44,14 +46,17 @@ class DataLoader():
         path = glob(r'data/%s/*' % (data_type))
         batch_images = np.random.choice(path, size=batch_size)
         
-        if patch_dimension==None:
+        if patch_dimension==None and is_testing==True:
             #if the patch dimension is not specified, use the training dimensions
             patch_dimension = self.img_res
             
         imgs = []
         for img_path in batch_images:
             img = self.imread(img_path)
-            img = self.get_random_patch(img, patch_dimension)   
+            img = self.get_random_patch(img, patch_dimension)
+            
+            img=zoom(img, zoom = (self.SRscale, self.SRscale, 1), order=1) #new addition
+            
             imgs.append(img)
 
         imgs = np.array(imgs)/127.5 - 1.
@@ -83,8 +88,11 @@ class DataLoader():
                 #img_B = scipy.misc.imresize(img_B, self.img_res)
                 if (img_A.shape[0]>self.img_res[0]) or (img_A.shape[1]>self.img_res[1]):
                     img_A=self.get_random_patch(img_A, patch_dimension = self.img_res)
+                    
+                    img_A=zoom(img_A, zoom = (self.SRscale, self.SRscale, 1), order=1)#new addition
+                    
                     img_B=self.get_random_patch(img_B, patch_dimension = self.target_res)
-
+                    
                 #if not is_testing and np.random.random() > 0.5:
                 #        img_A = np.fliplr(img_A)
                 #        img_B = np.fliplr(img_B)
