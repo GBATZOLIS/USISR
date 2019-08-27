@@ -10,6 +10,10 @@ from glob import glob
 import numpy as np
 import matplotlib.pyplot as plt
 from scipy.ndimage import zoom
+from scipy.misc import imresize
+import keras.backend as K
+#from skimage.transform import downscale_local_mean
+#This file contains the DataLoader class
 
 class DataLoader():
     def __init__(self, img_res=(128, 128), SRscale=2):
@@ -19,6 +23,9 @@ class DataLoader():
         self.target_res = (SRscale*self.img_res[0], SRscale*self.img_res[1], 3)
         #self.main_path = main_path
         
+    
+    #def resize(self, x):
+    #    return K.resize_images(x, 1/self.SRscale, 1/self.SRscale, data_format = "channels_last", interpolation = "bilinear")
     
     def get_random_patch(self, img, patch_dimension):
         if img.shape[0]==patch_dimension[0] and img.shape[1]==patch_dimension[1]:
@@ -55,7 +62,7 @@ class DataLoader():
             img = self.imread(img_path)
             img = self.get_random_patch(img, patch_dimension)
             
-            img=zoom(img, zoom = (self.SRscale, self.SRscale, 1), order=1) #new addition
+            #img=zoom(img, zoom = (self.SRscale, self.SRscale, 1), order=1) #new addition
             
             imgs.append(img)
 
@@ -79,19 +86,23 @@ class DataLoader():
         for i in range(self.n_batches-1):
             batch_A = path_A[i*batch_size:(i+1)*batch_size]
             batch_B = path_B[i*batch_size:(i+1)*batch_size]
-            imgs_A, imgs_B = [], []
+            imgs_A, imgs_B, downscaled_imgs_B = [], [], []
             for img_A, img_B in zip(batch_A, batch_B):
                 img_A = self.imread(img_A)
                 img_B = self.imread(img_B)
-
                 #img_A = scipy.misc.imresize(img_A, self.img_res)
                 #img_B = scipy.misc.imresize(img_B, self.img_res)
                 if (img_A.shape[0]>self.img_res[0]) or (img_A.shape[1]>self.img_res[1]):
                     img_A=self.get_random_patch(img_A, patch_dimension = self.img_res)
                     
-                    img_A=zoom(img_A, zoom = (self.SRscale, self.SRscale, 1), order=1)#new addition
+                    #img_A=zoom(img_A, zoom = (self.SRscale, self.SRscale, 1), order=1)#new addition
                     
                     img_B=self.get_random_patch(img_B, patch_dimension = self.target_res)
+                
+                downscaled_img_B = imresize(arr = img_B, size = 0.5)
+                downscaled_imgs_B.append(downscaled_img_B)
+                #downscaled_img_B = downscale_local_mean(img_B, (self.SRscale, self.SRscale))
+                
                     
                 #if not is_testing and np.random.random() > 0.5:
                 #        img_A = np.fliplr(img_A)
@@ -99,11 +110,17 @@ class DataLoader():
 
                 imgs_A.append(img_A)
                 imgs_B.append(img_B)
+                #downscaled_imgs_B.append(imgs_B)
 
             imgs_A = np.array(imgs_A)/127.5 - 1.
             imgs_B = np.array(imgs_B)/127.5 - 1.
+            downscaled_imgs_B = np.array(downscaled_imgs_B)/127.5 - 1.
+            print(imgs_A.shape)
+            print(imgs_B.shape)
+            print(downscaled_imgs_B.shape)
+            #downscaled_img_B = self.resize(K.variable(imgs_B))
 
-            yield imgs_A, imgs_B
+            yield imgs_A, imgs_B, downscaled_imgs_B
 
     def load_img(self, path):
         img = self.imread(path)

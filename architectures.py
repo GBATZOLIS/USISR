@@ -8,28 +8,35 @@ Created on Wed Aug 14 11:55:26 2019
 import keras.backend as K
 from keras.layers import *
 from keras.activations import *
+from keras.optimizers import Adam
 from keras.initializers import glorot_normal
+from keras.regularizers import l1
 from keras.models import Model
 import numpy as np
 from preprocessing import rgb2gray
+from subpixel import Subpixel
 
+#This is a collection of model architectures that might be used for training
 
-def resblock(feature_in, num):
-    # subblock (conv. + BN + relu)
-    temp =  Conv2D(64, (3, 3), strides = 1, padding = 'SAME', name = ('resblock_%d_CONV_1' %num), kernel_initializer = glorot_normal())(feature_in)
-    temp = BatchNormalization(name = ('resblock_%d_BN_1' %num))(temp)
-    temp = Activation('relu')(temp)
-        
-    # subblock (conv. + BN + relu)
-    temp =  Conv2D(64, (3, 3), strides = 1, padding = 'SAME', name = ('resblock_%d_CONV_2' %num), kernel_initializer = glorot_normal())(temp)
-    temp = BatchNormalization(name = ('resblock_%d_BN_2' %num))(temp)
-    temp = Activation('relu')(temp)
-    
-    return Add()([temp, feature_in])
-
+"""
+ARCHITEXTURES USED IN WESPE PAPER FOR IMAGE ENHANCEMENT
+"""
 
 def generator_network(image_shape, name):
     
+    def resblock(feature_in, num):
+        # subblock (conv. + BN + relu)
+        temp =  Conv2D(64, (3, 3), strides = 1, padding = 'SAME', name = ('resblock_%d_CONV_1' %num), kernel_initializer = glorot_normal())(feature_in)
+        temp = BatchNormalization(name = ('resblock_%d_BN_1' %num))(temp)
+        temp = Activation('relu')(temp)
+            
+        # subblock (conv. + BN + relu)
+        temp =  Conv2D(64, (3, 3), strides = 1, padding = 'SAME', name = ('resblock_%d_CONV_2' %num), kernel_initializer = glorot_normal())(temp)
+        temp = BatchNormalization(name = ('resblock_%d_BN_2' %num))(temp)
+        temp = Activation('relu')(temp)
+        
+        return Add()([temp, feature_in])
+
     image = Input(image_shape)
     b1_in = Conv2D(64, (9,9), strides = 1, padding = 'SAME', name = 'CONV_1', activation = 'relu', kernel_initializer = glorot_normal())(image)
     #b1_in = relu()(b1_in)
@@ -135,5 +142,49 @@ def discriminator_network(name, preprocess = 'gray'):
         probability = sigmoid(logits)
         
         return Model(inputs=image, outputs=probability, name=name)
+
+"""
+USING CINCGAN SUGGESTIONS FOR UNSUPERVISED SR
+"""
+
+#EDSR model for the upscaling generator
+def EDSR(scale = 4, input_shape = (48, 48, 3), n_feats = 256, n_resblocks = 32, name="Generator"):
+    ''' 
+        According to the paper scale can be 2,3 or 4. 
+        However this code supports scale to be 3 or any of 2^n for n>0
+    '''
+    def res_block(input_tensor, nf, res_scale = 1.0):
+        x = Conv2D(nf, (3, 3), padding='same', activation = 'relu')(input_tensor)
+        x = Conv2D(nf, (3, 3), padding='same')(x)
+        x = Lambda(lambda x: x * res_scale)(x)
+        x = Add()([x, input_tensor])
+        return x
     
+    inp = Input(shape = input_shape)
+    
+    x = Conv2D(n_feats, 3, padding='same', data_format="channels_last")(inp)
+    conv1 = x
+    
+    if n_feats == 256:
+        res_scale = 0.1
+    else:
+        res_scale = 1.0
+    for i in range(n_resblocks): x = res_block(x, n_feats, res_scale)
+    
+    x = Conv2D(n_feats, 3, padding='same')(x)
+    x = Add()([x, conv1])
+    
+    if not scale%2:
+        for i in range(int(np.log2(scale))):
+            x = Subpixel(n_feats, 3, 2, padding='same')(x)
+    else: # scale = 3
+        x = Subpixel(n_feats, 3, 3, padding='same')(x)
+    
+    sr = Conv2D(input_shape[-1], 1, padding='same')(x)
+            
+    return Model(inputs=inp, outputs=sr, name = name)
+    
+#model = EDSR(scale = 2, input_shape = (32, 32, 3), n_feats = 64, n_resblocks = 32, name="Generator")
+#model.compile(loss = 'mse', optimizer=Adam(0.001))
+#model.summary()
     

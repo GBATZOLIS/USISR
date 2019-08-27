@@ -41,7 +41,7 @@ class WespeGAN():
         self.data_loader = DataLoader(img_res=(self.img_rows, self.img_cols), SRscale=SRscale)
         
         #configure perceptual loss 
-        self.content_layer = 'block1_conv2'
+        #self.content_layer = 'block1_conv1'
         
         #set the blurring settings
         self.kernel_size=21
@@ -220,11 +220,27 @@ class WespeGAN():
         input_tensor = K.concatenate([y_true, y_pred], axis=0)
         model = VGG19(input_tensor=input_tensor,weights='imagenet', include_top=False)
         outputs_dict = dict([(layer.name, layer.output) for layer in model.layers])
-        layer_features = outputs_dict[self.content_layer]
+        
+        
+        loss=0
+        
+        layer_features = outputs_dict["block1_conv1"]
         y_true_features = layer_features[0, :, :, :]
         y_pred_features = layer_features[1, :, :, :]
+        loss += K.mean(K.square(y_true_features - y_pred_features))
         
-        return K.mean(K.square(y_true_features - y_pred_features)) 
+        layer_features = outputs_dict["block1_conv1"]
+        y_true_features = layer_features[0, :, :, :]
+        y_pred_features = layer_features[1, :, :, :]
+        loss += K.mean(K.square(y_true_features - y_pred_features))
+        
+        layer_features = outputs_dict["block1_conv2"]
+        y_true_features = layer_features[0, :, :, :]
+        y_pred_features = layer_features[1, :, :, :]
+        loss += K.mean(K.square(y_true_features - y_pred_features)) 
+        
+        
+        return loss
 
     def train(self, epochs, batch_size=1, sample_interval=50):
         #every sample_interval batches, the model is saved and sample images are generated and saved
