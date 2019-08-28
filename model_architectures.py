@@ -91,9 +91,9 @@ def D2(input_shape, name):
     
     
 
-model = G3(input_shape = (64,64,3), name="G3")
-model.compile(loss="mse", optimizer=Adam(0.001))
-model.summary()
+#model = G3(input_shape = (64,64,3), name="G3")
+#model.compile(loss="mse", optimizer=Adam(0.001))
+#model.summary()
     
     
     

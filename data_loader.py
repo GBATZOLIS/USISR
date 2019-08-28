@@ -12,6 +12,7 @@ import matplotlib.pyplot as plt
 from scipy.ndimage import zoom
 from scipy.misc import imresize
 import keras.backend as K
+import cv2 as cv
 #from skimage.transform import downscale_local_mean
 #This file contains the DataLoader class
 
@@ -99,9 +100,8 @@ class DataLoader():
                     
                     img_B=self.get_random_patch(img_B, patch_dimension = self.target_res)
                 
-                downscaled_img_B = imresize(arr = img_B, size = 0.5)
+                downscaled_img_B = cv.resize(img_B, (self.img_res[0], self.img_res[1]), interpolation = cv.INTER_LINEAR)
                 downscaled_imgs_B.append(downscaled_img_B)
-                #downscaled_img_B = downscale_local_mean(img_B, (self.SRscale, self.SRscale))
                 
                     
                 #if not is_testing and np.random.random() > 0.5:
@@ -115,9 +115,9 @@ class DataLoader():
             imgs_A = np.array(imgs_A)/127.5 - 1.
             imgs_B = np.array(imgs_B)/127.5 - 1.
             downscaled_imgs_B = np.array(downscaled_imgs_B)/127.5 - 1.
-            print(imgs_A.shape)
-            print(imgs_B.shape)
-            print(downscaled_imgs_B.shape)
+            #print(imgs_A.shape)
+            #print(imgs_B.shape)
+            #print(downscaled_imgs_B.shape)
             #downscaled_img_B = self.resize(K.variable(imgs_B))
 
             yield imgs_A, imgs_B, downscaled_imgs_B

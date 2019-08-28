@@ -35,6 +35,7 @@ from loss_functions import  total_variation, binary_crossentropy
 from keras.applications.vgg19 import VGG19
 from scipy.misc import imresize
 from model_architectures import *
+import cv2 as cv
 
 class CINGAN():
     def __init__(self, patch_size=(100,100), SRscale=2):
@@ -49,7 +50,7 @@ class CINGAN():
         # Calculate output shape of D (PatchGAN)
         patch = int(self.target_res[0] / 2**3)
         self.disc_patch = (patch, patch, 1)
-        print(self.disc_patch)
+        #print(self.disc_patch)
         
         # Configure data loader
         #self.main_path = "C:\\Users\\Georgios\\Desktop\\4year project\\wespeDATA"
@@ -90,14 +91,18 @@ class CINGAN():
         img_A = Input(shape=self.img_shape)
         img_B = Input(shape=self.target_res)
         downscaled_img_B = Input(shape=self.img_shape)
+        #downscaled_img_B = AveragePooling2D(pool_size=(2, 2))(img_B)
         
         # Translate images to the other domain
         fake_B = self.G(img_A)
-        #downscaled_img_B = Lambda(self.resize)(img_B)
+        #fake_A = self.F(img_B)
+        
+        #identity
         identity_B = self.G(downscaled_img_B)
         
         # Translate images back to original domain
         reconstr_A = self.F(fake_B)
+        #reconstr_B = self.G(fake_A)
         
         # For the combined model we will only train the generators
         self.D2.trainable = False
@@ -109,16 +114,28 @@ class CINGAN():
         self.combined = Model(inputs=[img_A, img_B, downscaled_img_B] ,
                               outputs=[valid_B, reconstr_A, identity_B, fake_B])
         
-        self.combined.compile(loss=['mse', 'mse', 'mse', total_variation],
-                            loss_weights=[1, 10, 5, 2],
+        self.combined.compile(loss=[binary_crossentropy, self.vgg_loss, self.vgg_loss, total_variation],
+                            loss_weights=[1, 0.1, 0.1, 0.01],
                             optimizer=optimizer)
         
         print(self.combined.summary())
         
+        
+        
     
+    def vgg_loss(self, y_true, y_pred):
+        
+        input_tensor = K.concatenate([y_true, y_pred], axis=0)
+        model = VGG19(input_tensor=input_tensor, weights='imagenet', include_top=False)
+        outputs_dict = dict([(layer.name, layer.output) for layer in model.layers])
+        layer_features = outputs_dict['block2_conv2']
+        y_true_features = layer_features[0, :, :, :]
+        y_pred_features = layer_features[1, :, :, :]
+        
+        return K.mean(K.square(y_true_features - y_pred_features)) 
         
     def forward_generator_network(self, name):
-        generator_model = SR(scale = self.SRscale, input_shape = self.img_shape, n_feats=64, n_resblocks=32, name = name)
+        generator_model = SR(scale = self.SRscale, input_shape = self.img_shape, n_feats=128, n_resblocks=32, name = name)
         return generator_model
         
     
@@ -139,7 +156,6 @@ class CINGAN():
 
         # Adversarial loss ground truths
         valid = np.ones((batch_size,) + self.disc_patch)
-        print("valid shape:{}".format(valid.shape))
         fake = np.zeros((batch_size,) + self.disc_patch)
 
         for epoch in range(epochs):
@@ -205,19 +221,16 @@ class CINGAN():
             #reconstr_B = self.g_AB.predict(fake_A)
             
             n_image = NormalizeData(image[0])
-            n_image = imresize(n_image, size=self.target_res)
+            n_image = cv.resize(n_image, (self.target_res[0], self.target_res[1]), interpolation = cv.INTER_CUBIC)
+            n_image = np.clip(n_image, 0, 1)
             n_image=np.expand_dims(n_image, axis=0)
-            #print(n_image.shape)
             
             n_fake_B = NormalizeData(fake_B)
-            #n_fake_B = imresize(n_fake_B, size=self.target_res)
-            #n_fake_B=np.expand_dims(n_fake_B, axis=0)
-            #print(n_fake_B.shape)
             
             n_reconstr_A = NormalizeData(reconstr_A[0])
-            n_reconstr_A = imresize(n_reconstr_A, size=self.target_res)
-            n_reconstr_A=np.expand_dims(n_reconstr_A, axis=0)
-            #print(n_reconstr_A.shape)
+            n_reconstr_A = cv.resize(n_reconstr_A, (self.target_res[0], self.target_res[1]), interpolation = cv.INTER_CUBIC)
+            n_reconstr_A = np.clip(n_reconstr_A, 0, 1)
+            n_reconstr_A = np.expand_dims(n_reconstr_A, axis=0)
             
             gen_imgs = np.concatenate([n_image, n_fake_B, n_reconstr_A])
     
@@ -244,8 +257,8 @@ class CINGAN():
 if __name__ == '__main__':
     patch_size=(32,32)
     epochs=20
-    batch_size=2
-    sample_interval = 40 #after sample_interval batches save the model and generate sample images
+    batch_size=1
+    sample_interval = 100 #after sample_interval batches save the model and generate sample images
     
     gan = CINGAN(patch_size=patch_size)
     gan.train(epochs=epochs, batch_size=batch_size, sample_interval=sample_interval)

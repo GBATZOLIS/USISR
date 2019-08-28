@@ -30,7 +30,6 @@ from keras.activations import relu,tanh,sigmoid
 from keras.initializers import glorot_normal
 from keras.models import Model
 from preprocessing import gauss_kernel, rgb2gray, NormalizeData
-from architectures import resblock
 
 from loss_functions import  total_variation, binary_crossentropy
 from keras.applications.vgg19 import VGG19
