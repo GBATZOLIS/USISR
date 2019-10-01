@@ -33,7 +33,7 @@ from preprocessing import gauss_kernel, rgb2gray, NormalizeData
 
 from loss_functions import  total_variation, binary_crossentropy
 from keras.applications.vgg19 import VGG19
-from scipy.misc import imresize
+#from scipy.misc import imresize
 from model_architectures import *
 import cv2 as cv
 
@@ -68,14 +68,14 @@ class CINGAN():
         #print(self.texture_weights.shape)
         
         #set the optimiser
-        optimizer = Adam(0.0002, 0.5)
+        optimizer = Adam(0.001, decay = 0.99)
         
         # Build and compile the discriminators
         
         self.D2 = self.discriminator_network(name="Color_Discriminator")
         
         
-        self.D2.compile(loss=binary_crossentropy, optimizer=optimizer, metrics=['accuracy'])
+        self.D2.compile(loss='binary_crossentropy', optimizer=optimizer, metrics=['accuracy'])
         print(self.D2.summary())
         
         #-------------------------
@@ -86,7 +86,15 @@ class CINGAN():
         # Build the generators
         self.G = self.forward_generator_network(name = "SR")
         self.F = self.backward_generator_network(name = "G3")
-
+        
+        self.vgg_model_LR = VGG19(weights='imagenet', include_top=False, input_shape = self.img_shape)
+        self.block2_conv1_LR = Model(inputs=self.vgg_model_LR.input, outputs=self.vgg_model_LR.get_layer("block2_conv1").output)
+        self.block2_conv1_LR.trainable=False
+        
+        self.vgg_model_SR = VGG19(weights='imagenet', include_top=False, input_shape = self.target_res)
+        self.block2_conv1_SR = Model(inputs=self.vgg_model_SR.input, outputs=self.vgg_model_SR.get_layer("block2_conv1").output)
+        self.block2_conv1_SR.trainable=False
+        
         # Input images from both domains
         img_A = Input(shape=self.img_shape)
         img_B = Input(shape=self.target_res)
@@ -99,9 +107,11 @@ class CINGAN():
         
         #identity
         identity_B = self.G(downscaled_img_B)
+        identity_B_vgg = self.block2_conv1_SR(identity_B)
         
         # Translate images back to original domain
         reconstr_A = self.F(fake_B)
+        reconstr_A_vgg = self.block2_conv1_LR(reconstr_A)
         #reconstr_B = self.G(fake_A)
         
         # For the combined model we will only train the generators
@@ -112,10 +122,10 @@ class CINGAN():
 
         # Combined model trains generators to fool discriminators
         self.combined = Model(inputs=[img_A, img_B, downscaled_img_B] ,
-                              outputs=[valid_B, reconstr_A, identity_B, fake_B])
+                              outputs=[valid_B, reconstr_A_vgg, identity_B_vgg, fake_B])
         
-        self.combined.compile(loss=[binary_crossentropy, self.vgg_loss, self.vgg_loss, total_variation],
-                            loss_weights=[1, 0.1, 0.1, 0.01],
+        self.combined.compile(loss=['binary_crossentropy', 'mse', 'mse', total_variation],
+                            loss_weights=[10, 5, 2, 0.1],
                             optimizer=optimizer)
         
         print(self.combined.summary())
@@ -128,14 +138,14 @@ class CINGAN():
         input_tensor = K.concatenate([y_true, y_pred], axis=0)
         model = VGG19(input_tensor=input_tensor, weights='imagenet', include_top=False)
         outputs_dict = dict([(layer.name, layer.output) for layer in model.layers])
-        layer_features = outputs_dict['block2_conv2']
+        layer_features = outputs_dict['block1_conv2']
         y_true_features = layer_features[0, :, :, :]
         y_pred_features = layer_features[1, :, :, :]
         
         return K.mean(K.square(y_true_features - y_pred_features)) 
         
     def forward_generator_network(self, name):
-        generator_model = SR(scale = self.SRscale, input_shape = self.img_shape, n_feats=128, n_resblocks=32, name = name)
+        generator_model = SR(scale = self.SRscale, input_shape = self.img_shape, n_feats=128, n_resblocks=8, name = name)
         return generator_model
         
     
@@ -167,7 +177,8 @@ class CINGAN():
 
                 # Translate images to opposite domain
                 fake_B = self.G.predict(imgs_A)
-                #fake_A = self.g_BA.predict(imgs_B)
+                imgs_A_vgg = self.block2_conv1_LR.predict(imgs_A)
+                imgs_B_vgg = self.block2_conv1_SR.predict(imgs_B)
 
                 # Train the discriminators (original images = real / translated = Fake)
                 d_loss_real = self.D2.train_on_batch(imgs_B, valid)
@@ -178,9 +189,9 @@ class CINGAN():
                 # ------------------
                 #  Train Generators
                 # ------------------
-
+                
                 # Train the generators
-                g_loss = self.combined.train_on_batch([imgs_A, imgs_B, downscaled_img_B], [valid, imgs_A, imgs_B, imgs_B])
+                g_loss = self.combined.train_on_batch([imgs_A, imgs_B, downscaled_img_B], [valid, imgs_A_vgg, imgs_B_vgg, imgs_B])
                 elapsed_time = datetime.datetime.now() - start_time
 
                 # Plot the progress
@@ -257,7 +268,7 @@ class CINGAN():
 if __name__ == '__main__':
     patch_size=(32,32)
     epochs=20
-    batch_size=1
+    batch_size=3
     sample_interval = 100 #after sample_interval batches save the model and generate sample images
     
     gan = CINGAN(patch_size=patch_size)

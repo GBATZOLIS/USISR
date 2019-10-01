@@ -9,9 +9,9 @@ import scipy
 from glob import glob
 import numpy as np
 import matplotlib.pyplot as plt
-from scipy.ndimage import zoom
-from scipy.misc import imresize
-import keras.backend as K
+#from scipy.ndimage import zoom
+#from scipy.misc import imresize
+#import keras.backend as K
 import cv2 as cv
 #from skimage.transform import downscale_local_mean
 #This file contains the DataLoader class

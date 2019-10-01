@@ -7,12 +7,13 @@ Created on Mon Aug 26 11:13:21 2019
 
 #this file defines the actual models to be used in training
 
-from architectures import EDSR
+from bucket_architectures import EDSR
 from keras.layers import *
 from keras.activations import *
 from keras.layers.advanced_activations import LeakyReLU
 from keras.models import Model
 from keras.optimizers import Adam
+from keras_contrib.layers.normalization.instancenormalization import InstanceNormalization
 
 def SR(scale, input_shape, n_feats, n_resblocks, name):
     model = EDSR(scale = scale, input_shape = input_shape, 
@@ -71,17 +72,17 @@ def D2(input_shape, name):
     x = Conv2D(128, 4, strides=2, padding='same')(x)
     x = LeakyReLU(alpha=0.2)(x)
     
-    x = BatchNormalization()(x)
+    #x = BatchNormalization()(x)
     
     x = Conv2D(256, 4, strides=2, padding='same')(x)
     x = LeakyReLU(alpha=0.2)(x)
     
-    x = BatchNormalization()(x)
+    #x = BatchNormalization()(x)
     
     x = Conv2D(512, 4, strides=1, padding='same')(x)
     x = LeakyReLU(alpha=0.2)(x)
     
-    x = BatchNormalization()(x)
+    #x = BatchNormalization()(x)
     
     x = Conv2D(1, 4, strides=1, padding='same')(x)
     
