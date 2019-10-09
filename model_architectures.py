@@ -7,13 +7,12 @@ Created on Mon Aug 26 11:13:21 2019
 
 #this file defines the actual models to be used in training
 
-from bucket_architectures import EDSR
+from architectures import EDSR
 from keras.layers import *
 from keras.activations import *
 from keras.layers.advanced_activations import LeakyReLU
 from keras.models import Model
 from keras.optimizers import Adam
-from keras_contrib.layers.normalization.instancenormalization import InstanceNormalization
 
 def SR(scale, input_shape, n_feats, n_resblocks, name):
     model = EDSR(scale = scale, input_shape = input_shape, 
@@ -66,25 +65,34 @@ def D2(input_shape, name):
     
     input_tensor = Input(input_shape)
     
-    x = Conv2D(64, 4, strides=2, padding='same', data_format="channels_last")(input_tensor)
+    x = Conv2D(64, 5, strides=2, padding='same', data_format="channels_last")(input_tensor)
     x = LeakyReLU(alpha=0.2)(x)
     
-    x = Conv2D(128, 4, strides=2, padding='same')(x)
+    x = Conv2D(128, 5, strides=1, padding='same')(x)
+    x = LeakyReLU(alpha=0.2)(x)
+    
+    x = Conv2D(256, 3, strides=2, padding='same')(x)
+    x = LeakyReLU(alpha=0.2)(x)
+    
+    x = Conv2D(256, 3, strides=1, padding='same')(x)
+    x = LeakyReLU(alpha=0.2)(x)
+    
+    x = Conv2D(256, 3, strides=1, padding='same')(x)
     x = LeakyReLU(alpha=0.2)(x)
     
     #x = BatchNormalization()(x)
     
-    x = Conv2D(256, 4, strides=2, padding='same')(x)
+    x = Conv2D(256, 3, strides=2, padding='same')(x)
     x = LeakyReLU(alpha=0.2)(x)
     
     #x = BatchNormalization()(x)
     
-    x = Conv2D(512, 4, strides=1, padding='same')(x)
+    x = Conv2D(512, 3, strides=2, padding='same')(x)
     x = LeakyReLU(alpha=0.2)(x)
     
     #x = BatchNormalization()(x)
     
-    x = Conv2D(1, 4, strides=1, padding='same')(x)
+    x = Conv2D(1, 3, strides=1, padding='same')(x)
     
     model = Model(inputs = input_tensor, outputs = x, name = name)
     
@@ -92,6 +100,8 @@ def D2(input_shape, name):
     
     
 
+model=D2((100,100,3), name="spiros")
+print(model.summary())
 #model = G3(input_shape = (64,64,3), name="G3")
 #model.compile(loss="mse", optimizer=Adam(0.001))
 #model.summary()

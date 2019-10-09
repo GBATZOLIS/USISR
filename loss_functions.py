@@ -11,27 +11,29 @@ def binary_crossentropy(y_true, y_pred):
                                                    logits=y_pred)
     
     
-# Define custom loss
+#loss function
 def vgg_loss(y_true, y_pred):
-
-    # Create a loss function that adds the MSE loss to the mean of all squared activations of a specific layer
+        
+    input_tensor = K.concatenate([y_true, y_pred], axis=0)
+    model = VGG19(input_tensor=input_tensor, weights='imagenet', include_top=False)
+    outputs_dict = dict([(layer.name, layer.output) for layer in model.layers])
+    layer_features = outputs_dict['block2_conv1']
+    y_true_features = layer_features[0, :, :, :]
+    y_pred_features = layer_features[1, :, :, :]
     
-    vggmodel = VGG19(include_top=False)
-    f_p = vggmodel(y_pred)  
-    f_t = vggmodel(y_true)  
-    return K.mean(K.square(f_p - f_t))
+    return K.mean(K.square(y_true_features - y_pred_features)) 
 
 #total variation loss used for spatial smoothing (makes sure the reconstructed image does not have very steep gradients)
 def total_variation(y_true, y_pred):
     
-    images=y_pred
+    x=y_pred
+    assert K.ndim(x) == 4
     
-    pixel_dif1 = images[:, 1:, :, :] - images[:, :-1, :, :]
-    pixel_dif2 = images[:, :, 1:, :] - images[:, :, :-1, :]
-      
-    a = K.square(pixel_dif1)
-    b = K.square(pixel_dif2)
+    img_nrows=x.shape[1]
+    img_ncols=x.shape[2]
     
-    sum_axis = [1, 2, 3]
+    a = K.square(x[:, :img_nrows - 1, :img_ncols - 1, :] - x[:, 1:, :img_ncols - 1, :])
+    b = K.square(x[:, :img_nrows - 1, :img_ncols - 1, :] - x[:, :img_nrows - 1, 1:, :])
     
-    return (K.sum(a, axis = sum_axis)+K.sum(b, axis = sum_axis))
+    #return K.sum(K.pow(a + b, 1.25))
+    return K.mean(a+b)
